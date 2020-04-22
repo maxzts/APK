@@ -1,0 +1,162 @@
+#include <dos.h>
+
+struct VIDEO
+{
+	unsigned char symbol;
+	unsigned char attribute;
+};
+
+int attribute = 0x03;
+
+struct BitMask* mask;
+
+//struct VIDEO far* out_reg(struct VIDEO far* screen, char reg);
+void _print_(int offset, int reg);
+void get_reg();
+
+void interrupt(*_int8M_) (...); // указатель на предыдущую функцию прерывания
+void interrupt(*_int9M_) (...);
+void interrupt(*_intAM_) (...);
+void interrupt(*_intBM_) (...);
+void interrupt(*_intCM_) (...);
+void interrupt(*_intDM_) (...);
+void interrupt(*_intEM_) (...);
+void interrupt(*_intFM_) (...);
+
+void interrupt(*_int60S_) (...);
+void interrupt(*_int61S_) (...);
+void interrupt(*_int62S_) (...);
+void interrupt(*_int63S_) (...);
+void interrupt(*_int64S_) (...);
+void interrupt(*_int65S_) (...);
+void interrupt(*_int66S_) (...);
+void interrupt(*_int67S_) (...);
+
+void interrupt _newint8M_(...) { get_reg(); _int8M_(); }// новая функция прерывания
+void interrupt _newint9M_(...) {
+    if(attribute > 0x05)
+	attribute = 0x02;
+    ++attribute;
+    get_reg();
+    _int9M_();
+}
+
+void interrupt _newintAM_(...) { get_reg(); _intAM_(); }
+void interrupt _newintBM_(...) { get_reg(); _intBM_(); }
+void interrupt _newintCM_(...) { get_reg(); _intCM_(); }
+void interrupt _newintDM_(...) { get_reg(); _intDM_(); }
+void interrupt _newintEM_(...) { get_reg(); _intEM_(); }
+void interrupt _newintFM_(...) { get_reg(); _intFM_(); }
+
+void interrupt _newint60S_(...) { get_reg(); _int60S_(); }
+void interrupt _newint61S_(...) { get_reg(); _int61S_(); }
+void interrupt _newint62S_(...) { get_reg(); _int62S_(); }
+void interrupt _newint63S_(...) { get_reg(); _int63S_(); }
+void interrupt _newint64S_(...) { get_reg(); _int64S_(); }
+void interrupt _newint65S_(...) { get_reg(); _int65S_(); }
+void interrupt _newint66S_(...) { get_reg(); _int66S_(); }
+void interrupt _newint67S_(...) { get_reg(); _int67S_(); }
+
+void get_reg(){
+    int MQR = 0;
+    int MSR = 0;
+    int MMR = 0;
+    int SRQ = 0;
+    int SSR = 0;
+    int SMR = 0;
+
+    MMR = inp(0x21);// get Master Mask Register
+    _print_(0, MMR);
+    outp(0x20, 0x0B);//
+    MSR = inp(0x20); // get Master Service Register
+    _print_(80, MSR);
+    outp(0x20, 0x0A);//
+    MQR = inp(0x20);// get Master Query Register
+    _print_(80*2, MQR);
+
+    SMR = inp(0xA1);// get Slave Mask Register
+    _print_(80*3, SMR);
+    outp(0xA0, 0x0B);//
+    SSR = inp(0xA0);// get Slave Service Register
+    _print_(80*4, SSR);
+    outp(0xA0, 0x0A);//
+    SRQ = inp(0xA0);// get Slave Query Register
+    _print_(80*5, SRQ);
+}
+
+//struct VIDEO far* screen;
+void _print_(int offset, int reg){
+    VIDEO far* screen = (VIDEO far*)MK_FP(0xB800, 0); // получить указатель на видеобуфф
+    char temp = 0;
+    screen+=offset;
+    for (int i = 7; i >= 0; --i){
+      temp = reg % 2;
+      reg /= 2;
+      screen->symbol = temp + '0';
+      screen->attribute = attribute;
+      ++screen;
+    }
+}
+
+void init(void){
+    _int8M_ = getvect(0x08); // get IRQ0
+    _int9M_ = getvect(0x09); // get IRQ1
+    _intAM_ = getvect(0x0A); // get IRQ2
+    _intBM_ = getvect(0x0B); // get IRQ3
+    _intCM_ = getvect(0x0C); // get IRQ4
+    _intDM_ = getvect(0x0D); // get IRQ5
+    _intEM_ = getvect(0x0E); // get IRQ6
+    _intFM_ = getvect(0x0F); // get IRQ7
+
+    _int60S_ = getvect(0x60); // get IRQ8
+    _int61S_ = getvect(0x61); // get IRQ9
+    _int62S_ = getvect(0x62); // get IRQ10
+    _int63S_ = getvect(0x63); // get IRQ11
+    _int64S_ = getvect(0x64); // get IRQ12
+    _int65S_ = getvect(0x65); // get IRQ13
+    _int66S_ = getvect(0x66); // get IRQ14
+    _int67S_ = getvect(0x67); // get IRQ15
+
+    setvect(0x08, _newint8M_); // set new interrupt function to IRQ0
+    setvect(0x09, _newint9M_); // set new interrupt function to IRQ1
+    setvect(0x0A, _newintAM_); // set new interrupt function to IRQ2
+    setvect(0x0B, _newintBM_); // set new interrupt function to IRQ3
+    setvect(0x0C, _newintCM_); // set new interrupt function to IRQ4
+    setvect(0x0D, _newintDM_); // set new interrupt function to IRQ5
+    setvect(0x0E, _newintEM_); // set new interrupt function to IRQ6
+    setvect(0x0F, _newintFM_); // set new interrupt function to IRQ7
+
+    setvect(0x60, _newint60S_); // set new interrupt function to IRQ8
+    setvect(0x61, _newint61S_); // set new interrupt function to IRQ9
+    setvect(0x62, _newint62S_); // set new interrupt function to IRQ10
+    setvect(0x63, _newint63S_); // set new interrupt function to IRQ11
+    setvect(0x64, _newint64S_); // set new interrupt function to IRQ12
+    setvect(0x65, _newint65S_); // set new interrupt function to IRQ13
+    setvect(0x66, _newint66S_); // set new interrupt function to IRQ14
+    setvect(0x67, _newint67S_); // set new interrupt function to IRQ15
+
+    _disable(); // disable all interruptions
+    outp(0x20, 0x11); //master ICW1
+    outp(0x21, 0x08); //master ICW2
+    outp(0x21, 0x04); //master ICW3
+    outp(0x21, 0x01); //master ICW4
+
+    outp(0xA0, 0x11); //slave ICW1
+    outp(0xA1, 0x60); //slave ICW2
+    outp(0xA1, 0x02); //slave ICW3
+    outp(0xA1, 0x01); //slave ICW4
+    _enable(); // enable all interruption
+}
+
+int main(){
+    unsigned far *fp;     //объявляем указатель
+    init();
+
+    FP_SEG (fp) = _psp; // получаем сегмент
+    FP_OFF (fp) = 0x2c; // и смещение сегмента данных с переменными среды
+    _dos_freemem(*fp); //чтобы его освободить
+
+    _dos_keep(0, (_DS -_CS)+(_SP/16)+1);
+
+    return 0;
+}
