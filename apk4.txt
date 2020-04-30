@@ -1,0 +1,252 @@
+#include <stdio.h>
+#include <dos.h>
+
+#define c 261
+#define d 294
+#define e 329
+#define f 349
+#define g 391
+#define gS 415
+#define a 440
+#define aS 455
+#define b 466
+#define cH 523
+#define cSH 554
+#define dH 587
+#define dSH 622
+#define eH 659
+#define fH 698
+#define fSH 740
+#define gH 784
+#define gSH 830
+#define aH 880
+
+void playSound();
+void printStateWords();
+void divRatio();
+void rand();
+
+int main() {
+	printf("Start values:\n");
+	printStateWords();
+	divRatio();
+
+	char choice;
+	unsigned int limit = 65535, number;
+
+	while (1) {
+		printf("\n\n1. Play sound.\n2. Print state words.\n3. Division ratio.\n4 Randomizer.\n0. Exit\n");
+		fflush(stdin);
+		printf("\nYour choise: ");
+		scanf("%c", &choice);
+
+		switch (choice) {
+		case '1':
+			playSound();
+			outp(0x43, 0xB4);
+			outp(0x42, limit % 256);
+			outp(0x42, limit / 256);
+			outp(0x61, inp(0x61) | 1);
+			break;
+		case '2':
+			printStateWords();
+			outp(0x43, 0xB4);
+			outp(0x42, limit % 256);
+			outp(0x42, limit / 256);
+			outp(0x61, inp(0x61) | 1); // enable channel work 
+			break;
+		case '3':
+			divRatio();
+			outp(0x43, 0xB4);
+			outp(0x42, limit % 256);
+			outp(0x42, limit / 256);
+			outp(0x61, inp(0x61) | 1);
+			break;
+		case '4':
+			rand();
+			outp(0x43, 0xB4);
+			outp(0x42, limit % 256);
+			outp(0x42, limit / 256);
+			outp(0x61, inp(0x61) | 1);
+			break;
+		case '0':
+			return 0;
+		default:
+			break;
+		}
+	}
+}
+
+
+void printStateWords() {
+	unsigned char controlBytes[3] = { 0xE2, 0xE4, 0xE8 }; // 11-10-001-0, 11-10-010-0, 11-10-100-0
+	// 00 - fixing counter value for reading
+	// 01 - read/write low byte
+	// 10 - hier byte
+	unsigned char state;
+	unsigned char ports[3] = { 0x40, 0x41, 0x42 };
+
+	for (int i = 0; i < 3; ++i) {
+		outp(0x43, controlBytes[i]); // write a command to read the channel status word into the control register
+
+		state = inp(ports[i]);
+
+		printf("Channel %d: ", i);
+		for (int j = 7; j >= 0; --j) {
+			printf("%d", (state >> j) & 1);
+		}
+		printf("\n");
+	}
+}
+
+void divRatio() {
+	int ports[3] = { 0x40, 0x41, 0x42 };
+	int controlBytes[3] = { 0, 64, 128 };	// 00-00-000-0, 01-00-000-0, 10-000-00-0
+	// fixing currebt counter value for reading
+
+	unsigned int iValue, iHigh, iLow, temp;
+
+	printf("Division ratio:\n");
+
+	for (int i = 0; i < 3; ++i) {
+		if (i == 2) {
+			outp(0x61, inp(0x61) | 3);
+		}
+		iValue = 0;
+		for (int j = 0; j < 30000; j++) {
+			outp(0x43, controlBytes[i]);
+			iLow = inp(ports[i]);
+			iHigh = inp(ports[i]);
+			temp = iHigh * 256 + iLow;
+			if (temp > iValue) iValue = temp;
+		}
+
+		if (i == 2) {
+			outp(0x61, inp(0x61) & 0xFC);
+		}
+		printf("Channel %d: %X\n", i, iValue);
+	}
+}
+
+void playNote(int note, int duration) {
+	long unsigned base = 1193180;
+	int kd = base / note;	// calculate the delay
+	//---------------------------- load the timer counter register
+	outp(0x42, kd);				// load high bytes
+	kd /= 256;
+	outp(0x42, kd);				// load low bytes
+	//---------------------------- turn on the loudspeaker
+	outp(0x61, inp(0x61) | 3);	// the signal from the third channel of the timer goes to the speaker input
+	delay(duration);		// delay
+}
+
+void playSound() {
+
+	outp(0x43, 0xB6);// writes value to port (go to the third(2) channel of the timer to access the speaker)
+
+	playNote(  a, 500);
+	playNote(  a, 500);
+	playNote(  a, 500);
+	playNote(  f, 350);
+	playNote(  cH, 150);
+
+	playNote(  a, 500);
+	playNote(  f, 350);
+	playNote(  cH, 150);
+	playNote(  a, 1000);
+	//first bit
+
+	playNote(  eH, 500);
+	playNote(  eH, 500);
+	playNote(  eH, 500);
+	playNote(  fH, 350);
+	playNote(  cH, 150);
+
+	playNote(  gS, 500);
+	playNote(  f, 350);
+	playNote(  cH, 150);
+	playNote(  a, 1000);
+	//second bit...
+
+	playNote(  aH, 500);
+	playNote(  a, 350);
+	playNote(  a, 150);
+	playNote(  aH, 500);
+	playNote(  gSH, 250);
+	playNote(  gH, 250);
+
+	playNote(  fSH, 125);
+	playNote(  fH, 125);
+	playNote(  fSH, 250);
+	delay(250);
+	playNote(  aS, 250);
+	playNote(  dSH, 500);
+	playNote(  dH, 250);
+	playNote(  cSH, 250);
+	//start of the interesting bit
+
+	playNote(  cH, 125);
+	playNote(  b, 125);
+	playNote(  cH, 250);
+	delay(250);
+	playNote(  f, 125);
+	playNote(  gS, 500);
+	playNote(  f, 375);
+	playNote(  a, 125);
+
+	playNote(  cH, 500);
+	playNote(  a, 375);
+	playNote(  cH, 125);
+	playNote(  eH, 1000);
+	//more interesting stuff (this doesn't quite get it right somehow)
+
+	playNote(  aH, 500);
+	playNote(  a, 350);
+	playNote(  a, 150);
+	playNote(  aH, 500);
+	playNote(  gSH, 250);
+	playNote(  gH, 250);
+
+	playNote(  fSH, 125);
+	playNote(  fH, 125);
+	playNote(  fSH, 250);
+	delay(250);
+	playNote(  aS, 250);
+	playNote(  dSH, 500);
+	playNote(  dH, 250);
+	playNote(  cSH, 250);
+	//repeat... repeat
+
+	playNote(  cH, 125);
+	playNote(  b, 125);
+	playNote(  cH, 250);
+	delay(250);
+	playNote(  f, 250);
+	playNote(  gS, 500);
+	playNote(  f, 375);
+	playNote(  cH, 125);
+
+	playNote(  a, 500);
+	playNote(  f, 375);
+	playNote(  c, 125);
+	playNote(  a, 1000);
+
+	outp(0x61, inp(0x61) & 0xFC); // turn off the speaker 
+}
+
+void rand() {
+	unsigned limit;
+	do {
+		printf("Enter limit [1, 65537]: ");
+	} while (!scanf("%u", &limit) || limit < 1);
+
+	outp(0x43, 0x80);
+	unsigned number = inp(0x40) + inp(0x40) * 256;
+	printf("%u\n", number);
+	if (limit > number)
+		number = limit % number;
+	else
+		number %= limit;
+
+	printf("Your rundom number is: %u\n", number);
+}
