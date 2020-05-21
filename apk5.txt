@@ -1,353 +1,261 @@
 #include <dos.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <conio.h>
 #include <io.h>
-//глобальный счётчик милисекунд
-int miliSeconds = 0;
-//указатель на старый обработчик прерываний ЧРВ
-void interrupt far(*oldInt70h)(...);
-//указатель на старый обработчик прерываний будильника
-void interrupt far(*oldInt4Ah)(...);
-//новый обработчик будильника
-void interrupt newInt4Ahandler(...);
-//новый обработчик ЧРВ
-void interrupt newInt70handler(...);	
 
-void freeze(void);
-void unfreeze(void);
+/* Время задержки */
+int delayValue;
 
-int BCDToInteger(int bcd);
-unsigned char IntToBCD(int value);
-void getTime(void);
-void setTime(void);
-void delay_time(void);
-void wait(void);
-void enableAlarm(void);
-void disableAlarm(void);
+void getTime();
+void setTime();
+void setDelay();
+void setAlarm();
+void resetAlarm();
+void inputTime();
 
-void main()
+int main()
 {
-	char c, value;
-	clrscr();
-	printf("\n1. Show time\n2. Set time\n3. Delay time\n4. Enable alarm\n5. Disable alarm\n0. Exit\n\n");
-	while (c != 0)
-	{
-		c = getch();
-		switch (c) 
-		{
-			case '1': getTime(); break;
-			case '2': setTime(); break;
-			case '3': delay_time(); break;
-			case '4': enableAlarm(); break;
-			case '5': disableAlarm(); break;
-			case '0': return;
+		while (1) {
+				printf("\n1.Show time\n");
+				printf("2.Set time\n");
+				printf("3.Enable alarm\n");
+				printf("4.Delay time\n");
+				printf("5.Exit\n");
+
+				switch (getch()) {
+					case '1':
+							system("cls");
+							getTime();
+							break;
+					case '2':
+							setTime();
+							break;
+					case '3':
+							setAlarm();
+							break;
+					case '4':
+							setDelay();
+							break;
+					case '5':
+						 system("cls");
+						 printf("Exiting...");
+						 delay(1200);
+						 return 0;
+					default:
+							printf("Wrong value!\nTry again: ");
+							system("cls");
+							break;
+					}
 		}
-		printf("\n1. Show time\n2. Set time\n3. Delay time\n4. Enable alarm\n5. Disable alarm\n0. Exit\n\n");
+}
+// Преобразование числа из десятичный формата в BCD формат.
+unsigned char toBcd(int val)
+{
+	return (unsigned char)((val / 10 * 16) + (val % 10));
+}
+// Преобразование числа из формата BCD в десятичный формат.
+unsigned char fromBcd(int val)
+{
+	return (unsigned char)((val / 16 * 10) + (val % 16));
+}
+
+/* Получение текущего времени */
+void getTime()
+{
+	char data[6];
+	/* Секунда, минута, час, день, месяц, год */
+	unsigned int reg[] = { 0x00, 0x02, 0x04, 0x07, 0x08, 0x09 };
+	unsigned char time[6];
+
+	for (int i = 0; i < 6; i++)
+	{
+		/* Выбираем нужный регистр */
+		outp(0x70, reg[i]);
+		/* Считываем значение из нужного регистра в массив */
+		data[i] = inp(0x71);
 	}
-}
 
-void wait(void) 
-{
-	do
-	{								
-		outp(0x70, 0x0A);		//регистр состояния 1(UIP - момент обновления показаний часов 0 -часы доступны)
-								//DV - 3 бита задают значение частоты обновления часов(для правильной работы должны быть уст в 010 - 32.768Кгц)
-								//RS - 4 бита возволяют выбрать делитель выходной частоты(для правильной работы должны быть уст в 0110 - 1.024)
-	} while (inp(0x71) & 0x80);	//ожидаем пока часы станут доступными		
-}
-
-void getTime(void) 
-{
-	int value;
-
-	wait();									//ожидаем часы
-	outp(0x70, 0x04);						//устанавливаем значение порта
-	value = inp(0x71);						//получаем значение часов	
-	printf("%d:", BCDToInteger(value));		//переводим двоично-десятичный вид в в представление int
-
-	wait();
-	outp(0x70, 0x02);											
-	value = inp(0x71);						//получаем значение минут
-	printf("%d:", BCDToInteger(value));
-
-	wait();
-	outp(0x70, 0x00);											
-	value = inp(0x71);						//получаем значение секунды
-	printf("%d   ", BCDToInteger(value));
-
-	wait();
-	outp(0x70, 0x07);											
-	value = inp(0x71);						//получаем значение даты
-	printf("%d.", BCDToInteger(value));
-
-	wait();
-	outp(0x70, 0x08);										
-	value = inp(0x71);						//получаем значение месяца
-	printf("%d.", BCDToInteger(value));
-
-	wait();
-	outp(0x70, 0x09);						
-	value = inp(0x71);						//получаем значение года
-	printf("%d   ", BCDToInteger(value));
-
-	wait();
-	outp(0x70, 0x06);									
-	value = inp(0x71);						//получаем значение дня недели
-	switch (BCDToInteger(value))
+	/* Переводим считанные значение в десятичную форму */
+	for (i = 0; i < 6; i++)
 	{
-		case 1: printf("Sunday\n"); break;
-		case 2: printf("Monday\n"); break;
-		case 3: printf("Tuesday\n"); break;
-		case 4: printf("Wednesday\n"); break;
-		case 5: printf("Thursday\n"); break;
-		case 6: printf("Friday\n"); break;
-		case 7: printf("Saturday\n"); break;	
-		default: printf("Day of week is not set\n"); break;
+		time[i] = fromBcd(data[i]);
 	}
+
+	printf("Time: %2d:%2d:%2d\nDate: %2d.%2d.20%2d\n", time[2], time[1], time[0], time[3], time[4], time[5]);
 }
 
-void setTime(void) 
-{
-	int value;
-	freeze();							
-	//получение данных
-	do 
-	{
+
+void setTime(){
+
+	char data[6];
+	/* Секунда, минута, час, день, месяц, год */
+	unsigned int reg[] = { 0x00, 0x02, 0x04, 0x07, 0x08, 0x09 };
+	int temp;
+	//ввод часов, минут и секунд
+	do {
+		fflush(stdin);
 		printf("Enter hour: ");
-		fflush(stdin);
-		scanf("%d", &value);
-		if (value > 23 || value < 0)
-			printf("Error incorrect value!\n");
-	} while (value > 23 || value < 0);
-	outp(0x70, 0x04);							
-	outp(0x71, IntToBCD(value));				//установка значений часов
+		scanf("%i", &temp);
+	} while ((temp > 23 || temp < 0));
+	data[2] = toBcd(temp);
 
-	do 
-	{
+	do {
+		fflush(stdin);
 		printf("Enter minute: ");
-		fflush(stdin);
-		scanf("%d", &value);
-		if (value > 59 || value < 0)
-			printf("Error incorrect value!\n");
-	} while (value > 59 || value < 0);
-	outp(0x70, 0x02);							
-	outp(0x71, IntToBCD(value));				//установка значений минут
+		scanf("%i", &temp);
+	} while (temp > 59 || temp < 0);
+	data[1] = toBcd(temp);
 
-	do 
-	{
+	do {
+		fflush(stdin);
 		printf("Enter second: ");
-		fflush(stdin);
-		scanf("%d", &value);
-		if (value > 59 || value < 0)
-			printf("Error incorrect value!\n");
-	} while (value > 59 || value < 0);
-	outp(0x70, 0x00);								
-	outp(0x71, IntToBCD(value));				//установка значений секунд
+		scanf("%i", &temp);
+	} while (temp > 59 || temp < 0);
+	data[0] = toBcd(temp);
 
-	do
+	int res;
+	do {
+		outp(0x70, 0x0A);
+		res=inp(0x71) & 0x80;
+	} while (res);
+
+  /* Отключаем обновление часов реального времени */
+	outp(0x70, 0xB);
+	outp(0x71, inp(0x71) | 0x80);
+
+	for (int i = 0; i < 3; i++)
 	{
-		printf("Enter week day number(1...7): ");
-		fflush(stdin);
-		scanf("%d", &value);
-		if (value > 7 || value < 1)
-			printf("Error incorrect value!\n");
-	} while (value > 7 || value < 1);
-	outp(0x70, 0x06);							
-	outp(0x71, IntToBCD(value));				//6-отвечает за дни недели
+		/* Выбираем нужный регистр с индексом registers[i]*/
+		outp(0x70, reg[i]);
+		/* Подаем в него нужное значение */
+		outp(0x71, data[i]);
+	}
 
-	do
-	{
-		printf("Enter day of month(1...31): ");
-		fflush(stdin);
-		scanf("%d", &value);
-		if (value > 31 || value < 1)
-			printf("Error incorrect value!\n");
-	} while (value > 31 || value < 1);
-	outp(0x70, 0x07);							
-	outp(0x71, IntToBCD(value));				//7-дата
+	/* Включаем обновление часов реально времени */
+	outp(0x70, 0xB);
+	outp(0x71, inp(0x71) & 0x7F);
 
-	do 
-	{
-		printf("Enter mounth(1...12): ");
-		fflush(stdin);
-		scanf("%d", &value);
-		if (value > 21 || value < 1)
-			printf("Error incorrect value!\n");
-	} while (value > 12 || value < 1);
-	outp(0x70, 0x08);							
-	outp(0x71, IntToBCD(value));				//8-месяц
+}
+/* Старый обработчик прерывания */
+void interrupt(*oldHandler)(...);
+/* Новый обработчики прерываний */
+void interrupt newHandler(...)
+{
+	delayValue--;
+	oldHandler();
+}
+void setDelay(){
 
-	do
-	{
-		printf("Enter year(0...99): ");
-		fflush(stdin);
-		scanf("%d", &value);
-		if (value > 99 || value < 0)
-			printf("Error incorrect value!\n");
-	} while (value > 99 || value < 0);
-	outp(0x70, 0x09);							
-	outp(0x71, IntToBCD(value));				//9-год
+	fflush(stdin);
+	printf("Enter delay time: ");
+	scanf("%d", &delayValue);
+	_disable();
+	/* Устанавливаем новые обработчики прерываний */
+	oldHandler = getvect(0x70);
+	setvect(0x70, newHandler);
+	_enable();
 
-	unfreeze();							
+	printf("This is your delay!");
+	outp(0xA1, inp(0xA1) & 0xFE); 		// размаскировать прерывания от RTC 11111110
+
+	  /* Выбираем регистр B */
+	outp(0x70, 0x0B);
+	outp(0x71, inp(0x71) | 0x40);		// разрешение переодических прерываний 01000000
+
+	while (delayValue > 0);
+
+	outp(0x70, 0x0B);
+	outp(0x71, inp(0x71) & 0xBF);	// запрещение переодических прерываний 10111111
+
+	outp(0xA1, inp(0xA1) | 0x01);//
+
+	_disable();
+	setvect(0x70, oldHandler);
+	_enable();
+
+	printf("\nOkey.You can go on!");
+
+	return;
 }
 
-void enableAlarm(void)
-{
+/* Старый обработчик прерывания */
+void interrupt(*oldAlarmHandler) (...);
+/* Новые обработчики прерываний */
+void interrupt newAlarmHandler(...) {
+	puts("\nAlarm! Alarm!\n");
 
-	int value, second, minute, hour;
-	//ввод данных для установки будильника
-	do
-	{
-		printf("Enter hour: ");
-		fflush(stdin);
-		scanf("%d", &hour);
-	} while (hour > 23 || hour < 0);
+	outp(0x70, 0xB);//запретить прерывания от будильника
+	outp(0x71, inp(0x71) & 0xDF);// (11011111)
 
-	do
-	{
-		printf("Enter minute: ");
-		fflush(stdin);
-		scanf("%d", &minute);
-	} while (minute > 59 || minute < 0);
+	oldAlarmHandler();
 
-	do 
-	{
-		printf("Enter second: ");
-		fflush(stdin);
-		scanf("%d", &second);
-	} while (second > 59 || second < 0);
-
-	//для записи времени 70 порт, для чтения и/или записи 71
-	outp(0x70, 0x01);				
-	outp(0x71, IntToBCD(second));	//установка секунд для будильника
-
-	outp(0x70, 0x03);				
-	outp(0x71, IntToBCD(minute));	//минуты для будильника
-
-	outp(0x70, 0x05);				
-	outp(0x71, IntToBCD(hour));		//часы для будильника
-
-	outp(0x70, 0xB);				//регистр состояния 2
-	outp(0x71, inp(0x71) | 0x20);	//0001 0100 - 5-ый бит AIE стоит в 1(прерывания будильника разрешены), 2-ой бит в 1(DM-формат времени и даты в двоичном виде)
-
-	//установка нового обработчика прерываний
-	disable();
-
-	oldInt4Ah = getvect(0x4A);		//запоминаем старый
-	setvect(0x4A, newInt4Ahandler);	//устанавливаем новый
-	
-	enable(); 
+	resetAlarm();
 }
 
-//восстановление старого значения прерывания после срабатывания будильника
-void disableAlarm()
-{
-	if (oldInt4Ah == NULL) {
-		printf("Alarm is already disable or not set.\n");
+void setAlarm(){
+
+	char data[6];
+	int temp;
+	do {
+		fflush(stdin);
+		printf("Hours: ");
+		scanf("%i", &temp);
+	} while ((temp > 23 || temp < 0));
+	data[2] = toBcd(temp);
+
+	do {
+		fflush(stdin);
+		printf("Minutes: ");
+		scanf("%i", &temp);
+	} while (temp > 59 || temp < 0);
+	data[1] = toBcd(temp);
+
+	do {
+		fflush(stdin);
+		printf("Seconds: ");
+		scanf("%i", &temp);
+	} while (temp > 59 || temp < 0);
+
+	data[0] = toBcd(temp);
+	/* Устанавливаем в регистры будильника нужное время */
+	outp(0x70, 0x05);
+	outp(0x71, data[2]);
+	outp(0x70, 0x03);
+	outp(0x71, data[1]);
+	outp(0x70, 0x01);
+	outp(0x71, data[0]);
+
+	_disable();
+	oldAlarmHandler = getvect(0x4A);
+	setvect(0x4A, newAlarmHandler);
+	_enable();
+
+	/* Выбираем регистр B */
+	outp(0x70, 0x0B);
+	outp(0x71, (inp(0x71) | 0x20)); // разрешить прерывание для будильника(00100000)
+
+	outp(0xA1, (inp(0xA0) & 0xFE));//размаскировать прерывания от RTC(11111110)
+
+	printf("%2d:%2d:%2d\n", fromBcd(data[2]), fromBcd(data[1]), fromBcd(data[0]));
+}
+
+void resetAlarm() {
+	if (oldAlarmHandler == NULL)//не установлен
+	{
 		return;
 	}
-	_disable();
-	
-	setvect(0x4A, oldInt4Ah);			//устанавливаем старое прерывание будильника
-	outp(0xA1, (inp(0xA0) | 0x01));
-	outp(0x70, 0x0B);
-	outp(0xA1, (inp(0x71) & 0xDF));		//11011111 для запрета прерываний будильника, конъюнкция даст 0 бит - в 1 и 5 бит - в 0
-	
-	_enable();
-
-	printf("Alarm is disable.\n");
-}
-
-void freeze(void) 
-{
-	unsigned char value;
-
-	wait();											//ожидания часов
-
-	outp(0x70, 0x0B);		
-	value = inp(0x71);								//заносим состояние регистра 0х0В
-	value |= 0x80;									//запрещаем обновления часов,с помощи установки UPD 7-го бита на 1
-	outp(0x70, 0x0B);
-	outp(0x71, value);								//заносим новое значение в регистр с установленным битом запрета		
-}
-
-void unfreeze(void)
-{
-	unsigned char value;
-	
-	wait();											//ожидание часов							
-	
-	outp(0x70, 0x0B);								//регистр состояния 2
-	value = inp(0x71);								//записываем состояние
-	value -= 0x80;									//разрешаем обновление часов, т.е. UPD 7-ой бит меняется на ноль
-	outp(0x70, 0x0B);
-	outp(0x71, value);								//записываем новое значение регистра 0х0В,обновление часов разрешено
-}
-
-//новый обработчик прерывания задержки ЧРВ
-void interrupt newInt70handler(...)
-{
-	miliSeconds++;									//глобальный счётчик милисекунд															
-	outp(0x70, 0x0C);								//регистр состояния 3(текущий стату прерывания часов)					
-	inp(0x71);										
-	outp(0x20, 0x20);								//посылаем контроллеру прерываний сигнал EOI(MASTER)
-	outp(0xA0, 0x20);								//посылаем контроллеру прерываний сигнал EOI(SLAVE)
-}
-
-//получает управление при срабатывании будильника
-void interrupt newInt4Ahandler(...) 
-{
-	fflush(stdout);
-	write(1, "Wake UP!\0",8);
-	//восстанавливаем старое значение
-	disableAlarm();						
-}
-
-//задержка на N мс
-void delay_time(void) 
-{
-	unsigned long delayPeriod;
-	unsigned char value;
-
-	do
-	{
-		printf("Enter delay time in milliseconds: ");
-		fflush(stdin);
-		scanf("%ld", &delayPeriod);
-	} while (delayPeriod < 1);
-	printf("Time before delay: ");
-	getTime();											//получить текущее время
-	printf("Delaying ...\n");
-
-	_disable();											//запрещаем прерывания						
-	oldInt70h = getvect(0x70);							//запоминаем старый обработчик прерывания
-	setvect(0x70, newInt70handler);						//устанавливаем свой обработчик прерывания
-	_enable();											//разрешаем прерывания
-
-
-	outp(0xA1, inp(0xA1) & 0xFE);						//размасирование линий сигнала запроса от ЧРВ 11111110, в перовм бите 0-разрешить прерывания							
-	outp(0x70, 0x0B);									//регистр состояния 2	
-	outp(0x71, inp(0x71) | 0x40);						//01000000 устанавливаем в 6-ой бит 1-PIE генерация переодических прерываний			
-
-	miliSeconds = 0;
-	while (miliSeconds != delayPeriod);					//цикл задержки	 
-	printf("End delay of %d ms\n", miliSeconds);
 
 	_disable();
-	setvect(0x70, oldInt70h);							//обратный процесс восстановления старого прерывания 		
+	  /* Возвращаем старое прерывание */
+	setvect(0x4A, oldAlarmHandler);
 	_enable();
 
-	printf("Time after delay: ");
-	getTime();											//выводим текущее время, дла сравнения время до задержки и посли неё
-}
-
-//перевод BCD-кода в нтовое значение
-int BCDToInteger(int bcd) 
-{
-	return bcd % 16 + bcd / 16 * 10;
-}
-
-unsigned char IntToBCD(int value) 
-{
-	return (unsigned char)((value / 10) << 4) | (value % 10);
+	/* Записываем нулевые значения*/
+	outp(0x70, 0x05);
+	outp(0x71, 0);
+	outp(0x70, 0x03);
+	outp(0x71, 0);
+	outp(0x70, 0x01);
+	outp(0x71, 0);
 }
